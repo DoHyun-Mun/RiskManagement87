@@ -1,0 +1,110 @@
+## Generated mta.yaml based on template version 0.4.0
+## appName = RiskManagement87
+## language=nodejs; multitenant=false
+## approuter=
+_schema-version: '3.1'
+ID: RiskManagement87
+version: 1.0.0
+description: "A simple CAP project."
+parameters:
+  enable-parallel-deployments: true
+   
+build-parameters:
+  before-all:
+   - builder: custom
+     commands:
+      - npm install --production
+      - npx -p @sap/cds-dk cds build --production
+
+modules:
+ # --------------------- SERVER MODULE ------------------------
+ - name: RiskManagement87-srv
+ # ------------------------------------------------------------
+   type: nodejs
+   path: gen/srv
+   parameters:
+     buildpack: nodejs_buildpack
+   requires:
+    # Resources extracted from CAP configuration
+    - name: RiskManagement87-db
+    - name: RiskManagement87-uaa
+   provides:
+    - name: srv-api      # required by consumers of CAP services (e.g. approuter)
+      properties:
+        srv-url: ${default-url}
+
+ # -------------------- SIDECAR MODULE ------------------------
+ - name: RiskManagement87-db-deployer
+ # ------------------------------------------------------------
+   type: hdb
+   path: gen/db  
+   parameters:
+     buildpack: nodejs_buildpack
+   requires:
+    # 'hana' and 'xsuaa' resources extracted from CAP configuration
+    - name: RiskManagement87-db
+    - name: RiskManagement87-uaa
+
+  # --------------------  APPROUTER -----------------------------
+ - name: RiskManagement87-approuter
+  # ------------------------------------------------------------
+   type: nodejs
+   path: approuter
+   requires:
+     - name: RiskManagement87-uaa
+     - name: srv-api
+       group: destinations
+       properties:
+         forwardAuthToken: true
+         strictSSL: true
+         name: srv-binding
+         url: '~{srv-url}'
+   build-parameters:
+     requires:
+       - name: RiskManagement87-app
+         artifacts:
+           - ./*
+         target-path: resources
+ 
+  # --------------------  UI -----------------------------------
+ - name: RiskManagement87-app
+  # ------------------------------------------------------------
+   type: html5
+   path: app
+   build-parameters:
+     supported-platforms: []
+
+resources:
+ # services extracted from CAP configuration
+ # 'service-plan' can be configured via 'cds.requires.<name>.vcap.plan'
+# ------------------------------------------------------------
+ - name: RiskManagement87-db
+# ------------------------------------------------------------
+   type: com.sap.xs.hdi-container
+   parameters:
+     service: hana  # or 'hanatrial' on trial landscapes
+     service-plan: hdi-shared
+   properties:
+     hdi-service-name: ${service-name}
+# ------------------------------------------------------------
+ - name: RiskManagement87-uaa
+# ------------------------------------------------------------
+   type: org.cloudfoundry.managed-service
+   parameters:
+     service: xsuaa
+     service-plan: application  
+     path: ./xs-security.json
+     config:
+       xsappname: RiskManagement87-${space}   #  name + space dependency
+       role-collections:
+         - name: 'RiskManager87-${space}'
+           description: Manage Risks
+           role-template-references:
+             - $XSAPPNAME.RiskManager87
+         - name: 'RiskViewer87-${space}'
+           description: View Risks
+           role-template-references:
+             - $XSAPPNAME.RiskViewer87
+
+
+
